@@ -7,7 +7,7 @@
 
 #include "localheap.h"
 #include <memkind.h>
-#include <memkind_pmem.h>
+#include <memkind/internal/memkind_pmem.h>
 #include <sys/param.h>
 #include <sys/mman.h>
 #include <stddef.h>
@@ -56,8 +56,8 @@ static void *my_pmem_mmap(struct memkind *kind, void *addr, size_t size) {
   struct memkind_pmem *priv = kind->priv;
   void *tr = priv->addr + priv->offset;
   priv->offset += size;
-  void *returnAddress = mmap(tr, size, PROT_READ | PROT_WRITE,
-                             MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0);
+  void *returnAddress =
+      mmap(tr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
   if (returnAddress == MAP_FAILED) {
     fprintf(stderr, "MMap call failed for local heap allocation\n");
   }

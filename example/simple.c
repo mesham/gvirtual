@@ -7,6 +7,7 @@
 
 #include "mpi.h"
 #include "gvirtual.h"
+#include <stdio.h>
 
 int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
@@ -15,7 +16,10 @@ int main(int argc, char* argv[]) {
   int i;
   for (i = 0; i < 10; i++) {
     data[i] = 10 - i;
+    printf("%d\n", data[i]);
   }
+  memkind_free(LOCALHEAP_KIND, data);
+  memkind_finalize();
   MPI_Finalize();
   return 0;
 }

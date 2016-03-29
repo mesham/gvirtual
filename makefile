@@ -1,5 +1,5 @@
 CC=mpicc
-CFLAGS=-g -fpic -I ../memkind/src -I ../distmem/src 
+CFLAGS=-g -fpic -I ../memkind_build/include -I ../distmem/src 
 
 %.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS)

@@ -9,6 +9,6 @@
 #include "distmem_mpi.h"
 
 void initialise_global_virtual_address_space() {
-  initialise_local_heap_space();
   distmem_mpi_init();
+  initialise_local_heap_space();
 }
