@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 struct memory_element_structure {
-  uintptr_t globalAddress, localAddress;
+  void* globalAddress, *localAddress;
   size_t numberElements;
   int homeNode;
   struct memory_element_structure* next, *prev;
@@ -23,8 +23,8 @@ static struct memory_element_structure* getMemoryElementFromLocalAddress(void*);
 
 void registerLocalMemory(void* globalAddress, void* localAddress, size_t numberElements, int homeNode) {
   struct memory_element_structure* newEntry = (struct memory_element_structure*)malloc(sizeof(struct memory_element_structure));
-  newEntry->globalAddress = (uintptr_t)globalAddress;
-  newEntry->localAddress = (uintptr_t)localAddress;
+  newEntry->globalAddress = globalAddress;
+  newEntry->localAddress = localAddress;
   newEntry->numberElements = numberElements;
   newEntry->homeNode = homeNode;
   newEntry->next = root;
@@ -43,8 +43,18 @@ int getHomeNode(void* globalAddress) {
   return specificMemoryItem->homeNode;
 }
 
-void removeMemory(void* localAddress) {
+void removeMemoryByLocalAddress(void* localAddress) {
   struct memory_element_structure* specificMemoryItem = getMemoryElementFromLocalAddress(localAddress);
+  if (specificMemoryItem != NULL) {
+    if (specificMemoryItem->next != NULL) specificMemoryItem->next->prev = specificMemoryItem->prev;
+    if (specificMemoryItem->prev != NULL) specificMemoryItem->prev->next = specificMemoryItem->next;
+    if (specificMemoryItem == root) root = specificMemoryItem->next;
+    free(specificMemoryItem);
+  }
+}
+
+void removeMemoryByGlobalAddress(void* globalAddress) {
+  struct memory_element_structure* specificMemoryItem = getMemoryElementFromGlobalAddress(globalAddress);
   if (specificMemoryItem != NULL) {
     if (specificMemoryItem->next != NULL) specificMemoryItem->next->prev = specificMemoryItem->prev;
     if (specificMemoryItem->prev != NULL) specificMemoryItem->prev->next = specificMemoryItem->next;
@@ -56,19 +66,22 @@ void removeMemory(void* localAddress) {
 void* getLocalAddress(void* globalAddress) {
   struct memory_element_structure* specificMemoryItem = getMemoryElementFromGlobalAddress(globalAddress);
   if (specificMemoryItem == NULL) return NULL;
-  return specificMemoryItem->localAddress;
+  return specificMemoryItem->localAddress + (specificMemoryItem->globalAddress - globalAddress);
 }
 
 void* getGlobalAddress(void* localAddress) {
   struct memory_element_structure* specificMemoryItem = getMemoryElementFromLocalAddress(localAddress);
   if (specificMemoryItem == NULL) return NULL;
-  return specificMemoryItem->globalAddress;
+  return specificMemoryItem->globalAddress + (specificMemoryItem->localAddress - localAddress);
 }
 
 static struct memory_element_structure* getMemoryElementFromGlobalAddress(void* globalAddress) {
   struct memory_element_structure* head = root;
   while (head != NULL) {
-    if (head->globalAddress == globalAddress) return head;
+    if (head->globalAddress == globalAddress ||
+        (globalAddress > head->globalAddress && globalAddress - head->numberElements <= head->globalAddress)) {
+      return head;
+    }
     head = head->next;
   }
   return NULL;
@@ -77,7 +90,10 @@ static struct memory_element_structure* getMemoryElementFromGlobalAddress(void* 
 static struct memory_element_structure* getMemoryElementFromLocalAddress(void* localAddress) {
   struct memory_element_structure* head = root;
   while (head != NULL) {
-    if (head->localAddress == (uintptr_t)localAddress) return head;
+    if (head->localAddress == localAddress ||
+        (localAddress > head->localAddress && localAddress - head->numberElements <= head->localAddress)) {
+      return head;
+    }
     head = head->next;
   }
   return NULL;

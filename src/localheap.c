@@ -85,7 +85,7 @@ static void *localheap_malloc(struct memkind *kind, size_t size) {
 
 static void localheap_free(struct memkind *kind, void *ptr) {
   memkind_default_free(kind, ptr);
-  removeMemory(ptr);
+  removeMemoryByLocalAddress(ptr);
 }
 
 static void *generateGlobalVirtualAddress(void *localAddress) { return virtualAddressBase + (localAddress - localAddressBase); }

@@ -10,7 +10,8 @@
 
 void registerLocalMemory(void*, void*, size_t, int);
 void registerRemoteMemory(void*, size_t, int);
-void removeMemory(void*);
+void removeMemoryByLocalAddress(void*);
+void removeMemoryByGlobalAddress(void*);
 int getHomeNode(void*);
 void* getGlobalAddress(void*);
 void* getLocalAddress(void*);
