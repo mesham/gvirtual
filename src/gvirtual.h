@@ -17,6 +17,5 @@
 #define GLOBAL_MAX_ADDRESS 0xFF00000
 
 void initialise_global_virtual_address_space();
-int getHomeNode(void *);
 
 #endif /* SRC_GVIRTUAL_H_ */

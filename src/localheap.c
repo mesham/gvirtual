@@ -57,6 +57,12 @@ void initialise_local_heap_space(int myRanka, int totalRanksa) {
   priv->offset = (uintptr_t)aligned_addr - (uintptr_t)addr;
 
   virtualAddressBase = (void *)GLOBAL_HEAP_BASE_ADDRESS + (myRank * LOCAL_HEAP_SIZE);
+  int i;
+  for (i = 0; i < totalRanks; i++) {
+    if (i != myRank) {
+      registerRemoteMemory((void *)GLOBAL_HEAP_BASE_ADDRESS + (i * LOCAL_HEAP_SIZE), LOCAL_HEAP_SIZE, i);
+    }
+  }
 }
 
 static void *my_pmem_mmap(struct memkind *kind, void *addr, size_t size) {
@@ -73,7 +79,7 @@ static void *my_pmem_mmap(struct memkind *kind, void *addr, size_t size) {
 
 static void *localheap_malloc(struct memkind *kind, size_t size) {
   void *localAddress = memkind_arena_malloc(kind, size);
-  registerMemory(generateGlobalVirtualAddress(localAddress), localAddress);
+  registerLocalMemory(generateGlobalVirtualAddress(localAddress), localAddress, size, myRank);
   return localAddress;
 }
 

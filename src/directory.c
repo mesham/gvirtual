@@ -7,9 +7,12 @@
 
 #include <stdlib.h>
 #include <mpi.h>
+#include <stdint.h>
 
 struct memory_element_structure {
-  void* globalAddress, *localAddress;
+  uintptr_t globalAddress, localAddress;
+  size_t numberElements;
+  int homeNode;
   struct memory_element_structure* next, *prev;
 };
 
@@ -18,14 +21,26 @@ struct memory_element_structure* root = NULL;
 static struct memory_element_structure* getMemoryElementFromGlobalAddress(void*);
 static struct memory_element_structure* getMemoryElementFromLocalAddress(void*);
 
-void registerLocalMemory(void* globalAddress, void* localAddress) {
+void registerLocalMemory(void* globalAddress, void* localAddress, size_t numberElements, int homeNode) {
   struct memory_element_structure* newEntry = (struct memory_element_structure*)malloc(sizeof(struct memory_element_structure));
-  newEntry->globalAddress = globalAddress;
-  newEntry->localAddress = localAddress;
+  newEntry->globalAddress = (uintptr_t)globalAddress;
+  newEntry->localAddress = (uintptr_t)localAddress;
+  newEntry->numberElements = numberElements;
+  newEntry->homeNode = homeNode;
   newEntry->next = root;
   newEntry->prev = NULL;
   if (root != NULL) root->prev = newEntry;
   root = newEntry;
+}
+
+void registerRemoteMemory(void* globalAddress, size_t numberElements, int homeNode) {
+  registerLocalMemory(globalAddress, NULL, numberElements, homeNode);
+}
+
+int getHomeNode(void* globalAddress) {
+  struct memory_element_structure* specificMemoryItem = getMemoryElementFromGlobalAddress(globalAddress);
+  if (specificMemoryItem == NULL) return -1;
+  return specificMemoryItem->homeNode;
 }
 
 void removeMemory(void* localAddress) {
@@ -62,7 +77,7 @@ static struct memory_element_structure* getMemoryElementFromGlobalAddress(void* 
 static struct memory_element_structure* getMemoryElementFromLocalAddress(void* localAddress) {
   struct memory_element_structure* head = root;
   while (head != NULL) {
-    if (head->localAddress == localAddress) return head;
+    if (head->localAddress == (uintptr_t)localAddress) return head;
     head = head->next;
   }
   return NULL;
