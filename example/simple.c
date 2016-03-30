@@ -7,12 +7,15 @@
 
 #include "mpi.h"
 #include "gvirtual.h"
+#include "directory.h"
 #include <stdio.h>
 
 int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
   initialise_global_virtual_address_space();
   int* data = (int*)memkind_malloc(LOCALHEAP_KIND, sizeof(int) * 10);
+  void* globalAddress = getGlobalAddress(data);
+  printf("Local: 0x%x Global: 0x%x\n", data, globalAddress);
   int i;
   for (i = 0; i < 10; i++) {
     data[i] = 10 - i;

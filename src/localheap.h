@@ -12,6 +12,6 @@
 #include <memkind.h>
 
 extern memkind_t LOCALHEAP_KIND;
-void initialise_local_heap_space();
+void initialise_local_heap_space(int, int);
 
 #endif /* SRC_LOCALHEAP_H_ */
