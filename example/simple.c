@@ -14,13 +14,24 @@
 
 int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
+
   initialise_global_virtual_address_space();
   int* data = (int*)memkind_malloc(LOCALHEAP_KIND, sizeof(int) * 10);
   void* globalAddress = getGlobalAddress(data);
   printf("Local heap data: Local=0x%x Global=0x%x\n", data, globalAddress);
+
   int* dist_data = (int*)distmem_mpi_malloc(DISTRIBUTEDHEAP_CONTIGUOUS_KIND, sizeof(int), 10, MPI_COMM_WORLD);
-  void* dist_GlobalAddress = getGlobalAddress(dist_data);
+  int* dist_GlobalAddress = (int*)getGlobalAddress(dist_data);
   printf("Distributed heap data: Local=0x%x Global=0x%x\n", dist_data, dist_GlobalAddress);
+  int myrank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+  if (myrank == 0) {
+    int i;
+    for (i = 0; i < 10; i++) {
+      printf("Distributed element number %d, home node is %d\n", i, getHomeNode(&dist_GlobalAddress[i]));
+    }
+  }
+
   memkind_free(DISTRIBUTEDHEAP_CONTIGUOUS_KIND, dist_data);
   memkind_free(LOCALHEAP_KIND, data);
   memkind_finalize();
