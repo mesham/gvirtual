@@ -27,7 +27,6 @@
 #define SIZE_MEM_STRIDES 1024
 #define VIRTUAL_ADDRESS_SEARCH_MEMORY_SIZE 4 * 1024 * 1024
 
-static const unsigned long sizeOfGlobalAddressSpace = 128ul * 1024ul * 1024ul;
 static int myRank, totalRanks;
 void *globalAddressSpaceStart, *globalAddressSpaceEnd, *localHeapGlobalAddressStart, *distributedMemoryHeapGlobalAddressStart;
 
@@ -57,14 +56,14 @@ void initialise_global_virtual_address_space() {
   MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
   MPI_Comm_size(MPI_COMM_WORLD, &totalRanks);
   unsigned long startofAddressSpace = determineVirtualAddressSpace();
-  globalAddressSpaceStart = mmap((void *)startofAddressSpace, sizeOfGlobalAddressSpace, PROT_READ | PROT_WRITE,
+  globalAddressSpaceStart = mmap((void *)startofAddressSpace, GLOBAL_ADDRESS_SPACE_SIZE, PROT_READ | PROT_WRITE,
                                  MAP_ANON | MAP_PRIVATE | MAP_NORESERVE | MAP_FIXED, -1, 0);
   deleteMemkindKind();
   if (globalAddressSpaceStart == MAP_FAILED) {
     fprintf(stderr, "Global virtual address space reservation error, error is '%s'\n", strerror(errno));
     abort();
   }
-  globalAddressSpaceEnd = globalAddressSpaceStart + sizeOfGlobalAddressSpace - 1;
+  globalAddressSpaceEnd = globalAddressSpaceStart + GLOBAL_ADDRESS_SPACE_SIZE - 1;
   distmem_mpi_init();
   localHeapGlobalAddressStart = initialise_local_heap_space(myRank, totalRanks, globalAddressSpaceStart);
   distributedMemoryHeapGlobalAddressStart = localHeapGlobalAddressStart + (totalRanks * LOCAL_HEAP_SIZE);
@@ -91,7 +90,7 @@ static void generateMemkindKind() {
 
   struct memkind_pmem *priv = MEMKIND_MEMLOOKUP->priv;
   priv->fd = 0;
-  priv->max_size = roundup(sizeof(size_t), VIRTUAL_ADDRESS_SEARCH_MEMORY_SIZE);
+  priv->max_size = VIRTUAL_ADDRESS_SEARCH_MEMORY_SIZE;
   priv->addr = mmap(0, priv->max_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
   priv->offset = 0;
 }
@@ -140,7 +139,7 @@ static unsigned long getStartOfGlobalVirtualAddressSpace(unsigned long **memoryS
   unsigned long allocation = -1;
   while (root != NULL) {
     if (root->next != NULL)
-      if (root->next != NULL && root->next->start - root->end > sizeOfGlobalAddressSpace) {
+      if (root->next != NULL && root->next->start - root->end > GLOBAL_ADDRESS_SPACE_SIZE) {
         return roundup(root->end + 1, 4096);
       }
     tofree = root;

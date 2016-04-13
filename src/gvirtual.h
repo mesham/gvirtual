@@ -12,7 +12,8 @@
 #include <memkind.h>
 #include "localheap.h"
 
-#define LOCAL_HEAP_SIZE 64 * 1024 * 1024
+static const unsigned long GLOBAL_ADDRESS_SPACE_SIZE = 64ul * 1024ul * 1024ul * 1024ul;
+static const unsigned long LOCAL_HEAP_SIZE = 64ul * 1024ul * 1024ul;
 
 void initialise_global_virtual_address_space();
 
