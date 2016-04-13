@@ -16,76 +16,49 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
+#include <math.h>
 
 static int myRank, totalRanks;
-void *localAddressBase, *virtualAddressBase;
+void *baseLocalHeapAddress;
 
 memkind_t LOCALHEAP_KIND;
 static void *my_pmem_mmap(struct memkind *, void *, size_t);
-static void *localheap_malloc(struct memkind *, size_t);
-static void localheap_free(struct memkind *, void *);
-static void *generateGlobalVirtualAddress(void *);
 
-struct memkind_ops MEMKIND_MY_OPS = {.create = memkind_pmem_create,
-                                     .destroy = memkind_pmem_destroy,
-                                     .malloc = localheap_malloc,
-                                     .calloc = memkind_arena_calloc,
-                                     .posix_memalign = memkind_arena_posix_memalign,
-                                     .realloc = memkind_arena_realloc,
-                                     .free = localheap_free,
-                                     .mmap = my_pmem_mmap,
-                                     .get_mmap_flags = memkind_pmem_get_mmap_flags,
-                                     .get_arena = memkind_thread_get_arena,
-                                     .get_size = memkind_pmem_get_size, };
+// needs to be modified for multiple processes
 
-static struct distmem_ops LOCALHEAP_MEMORY_VTABLE = {
-    .dist_malloc = NULL, .dist_create = distmem_arena_create, .memkind_operations = &MEMKIND_MY_OPS};
+void *initialise_local_heap_space(int myRanka, int totalRanksa, void *global_base_address) {
+  struct memkind_ops *my_memkind_ops = (struct memkind_ops *)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memkind_ops));
+  memcpy(my_memkind_ops, &MEMKIND_PMEM_OPS, sizeof(struct memkind_ops));
+  my_memkind_ops->mmap = my_pmem_mmap;
 
-void initialise_local_heap_space(int myRanka, int totalRanksa) {
   myRank = myRanka;
   totalRanks = totalRanksa;
+  struct distmem_ops LOCALHEAP_MEMORY_VTABLE = {
+      .dist_malloc = NULL, .dist_create = distmem_arena_create, .memkind_operations = my_memkind_ops};
   distmem_create(&LOCALHEAP_MEMORY_VTABLE, "localheap", &LOCALHEAP_KIND);
-  size_t Chunksize = LOCAL_HEAP_SIZE;
-  void *addr = malloc(Chunksize);
-  size_t s = sizeof(Chunksize);
-  jemk_mallctl("opt.lg_chunk", &Chunksize, &s, NULL, 0);
-  void *aligned_addr = (void *)roundup((uintptr_t)addr, Chunksize);
+
+  size_t jemk_chunksize_exponent;
+  size_t s = sizeof(jemk_chunksize_exponent);
+  jemk_mallctl("opt.lg_chunk", &jemk_chunksize_exponent, &s, NULL, 0);
+
+  int jemk_chunksize = (int)pow(2.0, jemk_chunksize_exponent);
+
   struct memkind_pmem *priv = LOCALHEAP_KIND->priv;
   priv->fd = 0;
-  priv->addr = addr;
-  priv->max_size = roundup(s, Chunksize);
-  priv->offset = (uintptr_t)aligned_addr - (uintptr_t)addr;
+  priv->addr = (void *)roundup((uintptr_t)global_base_address, jemk_chunksize);
+  priv->max_size = LOCAL_HEAP_SIZE;
+  priv->offset = 0;
 
-  virtualAddressBase = (void *)GLOBAL_HEAP_BASE_ADDRESS + (myRank * LOCAL_HEAP_SIZE);
+  mlock(priv->addr, priv->max_size);
+
   int i;
   for (i = 0; i < totalRanks; i++) {
-    if (i != myRank) {
-      registerRemoteMemory((void *)GLOBAL_HEAP_BASE_ADDRESS + (i * LOCAL_HEAP_SIZE), LOCAL_HEAP_SIZE, i);
-    }
+    registerMemory(priv->addr + (i * LOCAL_HEAP_SIZE), LOCAL_HEAP_SIZE, i);
   }
+  MPI_Win win;
+  MPI_Win_create(priv->addr, LOCAL_HEAP_SIZE, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+  return priv->addr;
 }
 
-static void *my_pmem_mmap(struct memkind *kind, void *addr, size_t size) {
-  struct memkind_pmem *priv = kind->priv;
-  void *tr = priv->addr + priv->offset;
-  priv->offset += size;
-  void *returnAddress = mmap(tr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-  if (returnAddress == MAP_FAILED) {
-    fprintf(stderr, "MMap call failed for local heap allocation\n");
-  }
-  localAddressBase = returnAddress;
-  return returnAddress;
-}
-
-static void *localheap_malloc(struct memkind *kind, size_t size) {
-  void *localAddress = memkind_arena_malloc(kind, size);
-  registerLocalMemory(generateGlobalVirtualAddress(localAddress), localAddress, size, myRank);
-  return localAddress;
-}
-
-static void localheap_free(struct memkind *kind, void *ptr) {
-  memkind_default_free(kind, ptr);
-  removeMemoryByLocalAddress(ptr);
-}
-
-static void *generateGlobalVirtualAddress(void *localAddress) { return virtualAddressBase + (localAddress - localAddressBase); }
+static void *my_pmem_mmap(struct memkind *kind, void *addr, size_t size) { return ((struct memkind_pmem *)kind->priv)->addr; }

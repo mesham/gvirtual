@@ -10,68 +10,91 @@
 #include "directory.h"
 #include <memkind/internal/memkind_default.h>
 #include <memkind/internal/memkind_arena.h>
+#include <memkind/internal/memkind_pmem.h>
 #include <stdio.h>
+#include <string.h>
 
 static void* globalDistributedMemoryHeapCurrentBottom;
-static void* distributedheap_malloc(struct distmem*, size_t, size_t, int, ...);
+static void* distributedheap_malloc(struct distmem*, size_t, size_t, struct distmem_block*, int, int, ...);
 static void distributedheap_free(struct memkind*, void*);
-
-static struct distmem_ops DISTRIBUTED_MEMORY_VTABLE = {.dist_malloc = distributedheap_malloc, .dist_create = distmem_arena_create};
 
 memkind_t DISTRIBUTEDHEAP_CONTIGUOUS_KIND;
 
-void initialise_distributed_heap(void* globalDistributedMemoryHeapBottomA) {
-  globalDistributedMemoryHeapCurrentBottom = globalDistributedMemoryHeapBottomA;
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations = (struct memkind_ops*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memkind_ops));
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations->create = memkind_arena_create;
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations->destroy = memkind_arena_destroy;
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations->malloc = memkind_arena_malloc;
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations->calloc = memkind_arena_calloc;
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations->posix_memalign = memkind_arena_posix_memalign;
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations->realloc = memkind_arena_realloc;
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations->free = distributedheap_free;
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations->get_size = memkind_default_get_size;
-  DISTRIBUTED_MEMORY_VTABLE.memkind_operations->get_arena = memkind_thread_get_arena;
+MPI_Datatype GVM_BLOCKS;
+
+struct global_vm_block {
+  unsigned long startAddress, endAddress;
+  int owner_pid;
+};
+
+void initialise_distributed_heap(void* globalDistributedMemoryHeapBottomAddress) {
+  globalDistributedMemoryHeapCurrentBottom = globalDistributedMemoryHeapBottomAddress;
+  struct memkind_ops* my_memkind_ops = (struct memkind_ops*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memkind_ops));
+  memcpy(my_memkind_ops, &MEMKIND_PMEM_OPS, sizeof(struct memkind_ops));
+  my_memkind_ops->free = distributedheap_free;
+
+  struct distmem_ops DISTRIBUTED_MEMORY_VTABLE = {.dist_malloc = distributedheap_malloc,
+                                                  .dist_create = distmem_arena_create,
+                                                  .memkind_operations = my_memkind_ops,
+                                                  .dist_determine_distribution = mpi_contiguous_distribution};
   int err = distmem_create(&DISTRIBUTED_MEMORY_VTABLE, "distributedcontiguous", &DISTRIBUTEDHEAP_CONTIGUOUS_KIND);
+
+  MPI_Datatype oldtypes[] = {MPI_UNSIGNED_LONG, MPI_UNSIGNED_LONG, MPI_INT};
+  int blockCounts[3] = {1};
+  MPI_Aint offsets[3];
+  offsets[0] = offsetof(struct global_vm_block, startAddress);
+  offsets[1] = offsetof(struct global_vm_block, endAddress);
+  offsets[2] = offsetof(struct global_vm_block, owner_pid);
+  MPI_Type_struct(3, blockCounts, offsets, oldtypes, &GVM_BLOCKS);
+  MPI_Type_commit(&GVM_BLOCKS);
+
   if (err) {
     fprintf(stderr, "Error allocating distributed kind\n");
   }
 }
 
-static void distributedheap_free(struct memkind* kind, void* ptr) {
-  struct distmem_mpi_memory_information* mpi_memory_info = distmem_mpi_get_info(kind, ptr);
-  void* baseGlobalAddress = getGlobalAddress(ptr);
-  // free the elements per process in the mpi bit too
-  int myRank;
-  MPI_Comm_rank(mpi_memory_info->communicator, &myRank);
-  int i;
-  for (i = myRank - 1; i >= 0; i--) {
-    baseGlobalAddress -= mpi_memory_info->elements_per_process[i] * mpi_memory_info->element_size;
-  }
-  for (i = 0; i < mpi_memory_info->procs_distributed_over; i++) {
-    removeMemoryByGlobalAddress(baseGlobalAddress);
-    baseGlobalAddress += mpi_memory_info->elements_per_process[i] * mpi_memory_info->element_size;
-  }
-  distmem_free(kind, ptr);
-}
+static void distributedheap_free(struct memkind* kind, void* ptr) { removeAllMemoriesByUUID((unsigned long)ptr); }
 
-static void* distributedheap_malloc(struct distmem* dist_kind, size_t element_size, size_t number_elements, int nargs, ...) {
+// Only works with contiguous (fine, but maybe rename)
+static void* distributedheap_malloc(struct distmem* dist_kind, size_t element_size, size_t number_elements,
+                                    struct distmem_block* allocation_blocks, int number_blocks, int nargs, ...) {
   va_list ap;
   va_start(ap, nargs);
+  int my_rank;
   MPI_Comm communicator = va_arg(ap, MPI_Comm);
-  void* localAddress = distmem_mpi_arena_malloc(dist_kind, element_size, number_elements, nargs, communicator);
-  struct distmem_mpi_memory_information* mpi_memory_info = distmem_mpi_get_info(dist_kind->memkind, localAddress);
-  int i, myRank;
-  size_t data_per_process;
-  MPI_Comm_rank(communicator, &myRank);
-  for (i = 0; i < mpi_memory_info->procs_distributed_over; i++) {
-    data_per_process = mpi_memory_info->elements_per_process[i] * element_size;
-    if (myRank == i) {
-      registerLocalMemory(globalDistributedMemoryHeapCurrentBottom, localAddress, data_per_process, myRank);
-    } else {
-      registerRemoteMemory(globalDistributedMemoryHeapCurrentBottom, data_per_process, i);
+  MPI_Comm_rank(communicator, &my_rank);
+
+  int i;
+  struct global_vm_block* address_blocks =
+      (struct global_vm_block*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct global_vm_block) * number_blocks);
+  void* my_start_address = NULL;
+  size_t local_mem_size = 0;
+  if (my_rank == 0) {
+    for (i = 0; i < number_blocks; i++) {
+      address_blocks[i].startAddress =
+          (unsigned long)globalDistributedMemoryHeapCurrentBottom + (allocation_blocks[i].startElement * element_size);
+      address_blocks[i].endAddress = (unsigned long)globalDistributedMemoryHeapCurrentBottom +
+                                     (allocation_blocks[i].endElement * element_size);  // wrong - under represents
+      address_blocks[i].owner_pid = allocation_blocks[i].process;
     }
-    globalDistributedMemoryHeapCurrentBottom += data_per_process;
+    globalDistributedMemoryHeapCurrentBottom += element_size * number_elements;
   }
-  return localAddress;
+  MPI_Bcast(address_blocks, number_blocks, GVM_BLOCKS, 0, communicator);
+  for (i = 0; i < number_blocks; i++) {
+    if (address_blocks[i].owner_pid == my_rank) {
+      my_start_address = (void*)address_blocks[i].startAddress;
+      local_mem_size = (address_blocks[i].endAddress - address_blocks[i].startAddress) + 1;
+    }
+  }
+  // Done in two stages to "tag" each entry in directory with the start address, this is so we can free memory in the directory
+  for (i = 0; i < number_blocks; i++) {
+    registerMemoryStartEnd((void*)address_blocks[i].startAddress, (void*)address_blocks[i].endAddress, address_blocks[i].owner_pid,
+                           (unsigned long)my_start_address);
+  }
+  memkind_free(MEMKIND_DEFAULT, address_blocks);
+  if (local_mem_size > 0) mlock(my_start_address, local_mem_size);
+  MPI_Win win;
+  MPI_Win_create(my_start_address, (MPI_Aint)local_mem_size, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+
+  return my_start_address;
 }

@@ -12,9 +12,7 @@
 #include <memkind.h>
 #include "localheap.h"
 
-#define LOCAL_HEAP_SIZE 4194304
-#define GLOBAL_HEAP_BASE_ADDRESS 0x11111000
-#define GLOBAL_MAX_ADDRESS 0xFF00000
+#define LOCAL_HEAP_SIZE 64 * 1024 * 1024
 
 void initialise_global_virtual_address_space();
 

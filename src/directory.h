@@ -8,12 +8,10 @@
 #ifndef DIRECTORY_H_
 #define DIRECTORY_H_
 
-void registerLocalMemory(void*, void*, size_t, int);
-void registerRemoteMemory(void*, size_t, int);
-void removeMemoryByLocalAddress(void*);
-void removeMemoryByGlobalAddress(void*);
+void registerMemory(void*, size_t, int);
+void registerMemoryStartEnd(void*, void*, int, unsigned long);
+void removeMemoryByAddress(void*);
+void removeAllMemoriesByUUID(unsigned long);
 int getHomeNode(void*);
-void* getGlobalAddress(void*);
-void* getLocalAddress(void*);
 
 #endif /* DIRECTORY_H_ */
