@@ -42,7 +42,7 @@ void initialise_distributed_heap(void* globalDistributedMemoryHeapBottomAddress)
   int err = distmem_create(distributed_heap_vtable, "distributedcontiguous", &DISTRIBUTEDHEAP_CONTIGUOUS_KIND);
 
   MPI_Datatype oldtypes[] = {MPI_UNSIGNED_LONG, MPI_UNSIGNED_LONG, MPI_INT};
-  int blockCounts[3] = {1};
+  int blockCounts[3] = {1, 1, 1};
   MPI_Aint offsets[3];
   offsets[0] = offsetof(struct global_vm_block, startAddress);
   offsets[1] = offsetof(struct global_vm_block, endAddress);
