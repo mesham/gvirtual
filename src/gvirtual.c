@@ -28,7 +28,7 @@
 #define VIRTUAL_ADDRESS_SEARCH_MEMORY_SIZE 4 * 1024 * 1024
 
 static int myRank, totalRanks;
-void *globalAddressSpaceStart, *globalAddressSpaceEnd, *localHeapGlobalAddressStart, *distributedMemoryHeapGlobalAddressStart;
+struct global_address_space_descriptor address_space_descriptor;
 
 struct memory_allocation_item {
   unsigned long start, end;
@@ -51,24 +51,29 @@ static void deleteMemkindKind();
 
 memkind_t MEMKIND_MEMLOOKUP;
 
-void initialise_global_virtual_address_space() {
+void initialiseGlobalVirtualAddressSpace() {
   generateMemkindKind();
   MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
   MPI_Comm_size(MPI_COMM_WORLD, &totalRanks);
   unsigned long startofAddressSpace = determineVirtualAddressSpace();
-  globalAddressSpaceStart = mmap((void *)startofAddressSpace, GLOBAL_ADDRESS_SPACE_SIZE, PROT_READ | PROT_WRITE,
-                                 MAP_ANON | MAP_PRIVATE | MAP_NORESERVE | MAP_FIXED, -1, 0);
+  address_space_descriptor.globalAddressSpaceStart =
+      mmap((void *)startofAddressSpace, GLOBAL_ADDRESS_SPACE_SIZE, PROT_READ | PROT_WRITE,
+           MAP_ANON | MAP_PRIVATE | MAP_NORESERVE | MAP_FIXED, -1, 0);
   deleteMemkindKind();
-  if (globalAddressSpaceStart == MAP_FAILED) {
+  if (address_space_descriptor.globalAddressSpaceStart == MAP_FAILED) {
     fprintf(stderr, "Global virtual address space reservation error, error is '%s'\n", strerror(errno));
     abort();
   }
-  globalAddressSpaceEnd = globalAddressSpaceStart + GLOBAL_ADDRESS_SPACE_SIZE - 1;
+  address_space_descriptor.globalAddressSpaceEnd = address_space_descriptor.globalAddressSpaceStart + GLOBAL_ADDRESS_SPACE_SIZE - 1;
   distmem_mpi_init();
-  localHeapGlobalAddressStart = initialise_local_heap_space(myRank, totalRanks, globalAddressSpaceStart);
-  distributedMemoryHeapGlobalAddressStart = localHeapGlobalAddressStart + (totalRanks * LOCAL_HEAP_SIZE);
-  initialise_distributed_heap(distributedMemoryHeapGlobalAddressStart);
+  address_space_descriptor.localHeapGlobalAddressStart =
+      initialise_local_heap_space(myRank, totalRanks, address_space_descriptor.globalAddressSpaceStart);
+  address_space_descriptor.distributedMemoryHeapGlobalAddressStart =
+      address_space_descriptor.localHeapGlobalAddressStart + (totalRanks * LOCAL_HEAP_SIZE);
+  initialise_distributed_heap(address_space_descriptor.distributedMemoryHeapGlobalAddressStart);
 }
+
+struct global_address_space_descriptor getGlobalVirtualAddressSpaceDescription() { return address_space_descriptor; }
 
 static void deleteMemkindKind() {
   memkind_arena_destroy(MEMKIND_MEMLOOKUP);

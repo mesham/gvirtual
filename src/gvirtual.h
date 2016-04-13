@@ -12,9 +12,14 @@
 #include <memkind.h>
 #include "localheap.h"
 
+struct global_address_space_descriptor {
+  void *globalAddressSpaceStart, *globalAddressSpaceEnd, *localHeapGlobalAddressStart, *distributedMemoryHeapGlobalAddressStart;
+};
+
 static const unsigned long GLOBAL_ADDRESS_SPACE_SIZE = 64ul * 1024ul * 1024ul * 1024ul;
 static const unsigned long LOCAL_HEAP_SIZE = 64ul * 1024ul * 1024ul;
 
-void initialise_global_virtual_address_space();
+void initialiseGlobalVirtualAddressSpace();
+struct global_address_space_descriptor getGlobalVirtualAddressSpaceDescription();
 
 #endif /* SRC_GVIRTUAL_H_ */
