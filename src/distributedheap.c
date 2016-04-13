@@ -15,7 +15,7 @@
 #include <string.h>
 
 static void* globalDistributedMemoryHeapCurrentBottom;
-static void* distributedheap_malloc(struct distmem*, size_t, size_t, struct distmem_block*, int, int, ...);
+static void* distributedheap_contiguous_malloc(struct distmem*, size_t, size_t, struct distmem_block*, int, int, ...);
 static void distributedheap_free(struct memkind*, void*);
 
 memkind_t DISTRIBUTEDHEAP_CONTIGUOUS_KIND;
@@ -33,11 +33,13 @@ void initialise_distributed_heap(void* globalDistributedMemoryHeapBottomAddress)
   memcpy(my_memkind_ops, &MEMKIND_PMEM_OPS, sizeof(struct memkind_ops));
   my_memkind_ops->free = distributedheap_free;
 
-  struct distmem_ops DISTRIBUTED_MEMORY_VTABLE = {.dist_malloc = distributedheap_malloc,
-                                                  .dist_create = distmem_arena_create,
-                                                  .memkind_operations = my_memkind_ops,
-                                                  .dist_determine_distribution = mpi_contiguous_distribution};
-  int err = distmem_create(&DISTRIBUTED_MEMORY_VTABLE, "distributedcontiguous", &DISTRIBUTEDHEAP_CONTIGUOUS_KIND);
+  struct distmem_ops* distributed_heap_vtable = (struct distmem_ops*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct distmem_ops));
+  distributed_heap_vtable->dist_malloc = distributedheap_contiguous_malloc;
+  distributed_heap_vtable->dist_create = distmem_arena_create;
+  distributed_heap_vtable->dist_determine_distribution = distmem_mpi_contiguous_distributer;
+  distributed_heap_vtable->memkind_operations = my_memkind_ops;
+
+  int err = distmem_create(distributed_heap_vtable, "distributedcontiguous", &DISTRIBUTEDHEAP_CONTIGUOUS_KIND);
 
   MPI_Datatype oldtypes[] = {MPI_UNSIGNED_LONG, MPI_UNSIGNED_LONG, MPI_INT};
   int blockCounts[3] = {1};
@@ -55,9 +57,8 @@ void initialise_distributed_heap(void* globalDistributedMemoryHeapBottomAddress)
 
 static void distributedheap_free(struct memkind* kind, void* ptr) { removeAllMemoriesByUUID((unsigned long)ptr); }
 
-// Only works with contiguous (fine, but maybe rename)
-static void* distributedheap_malloc(struct distmem* dist_kind, size_t element_size, size_t number_elements,
-                                    struct distmem_block* allocation_blocks, int number_blocks, int nargs, ...) {
+static void* distributedheap_contiguous_malloc(struct distmem* dist_kind, size_t element_size, size_t number_elements,
+                                               struct distmem_block* allocation_blocks, int number_blocks, int nargs, ...) {
   va_list ap;
   va_start(ap, nargs);
   int my_rank;
