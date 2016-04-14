@@ -20,13 +20,18 @@ static void distributedheap_free(struct memkind*, void*);
 
 memkind_t DISTRIBUTEDHEAP_CONTIGUOUS_KIND;
 
+// MPI datatype used to communicate the distributed blocks of memory
 MPI_Datatype GVM_BLOCKS;
 
+// The block structure that is communicated from the master to other processes
 struct global_vm_block {
   unsigned long startAddress, endAddress;
   int owner_pid;
 };
 
+/**
+ * Will initialise the distributed heap, starting at a specific memory address
+ */
 void initialise_distributed_heap(void* globalDistributedMemoryHeapBottomAddress) {
   globalDistributedMemoryHeapCurrentBottom = globalDistributedMemoryHeapBottomAddress;
   struct memkind_ops* my_memkind_ops = (struct memkind_ops*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memkind_ops));
@@ -55,8 +60,16 @@ void initialise_distributed_heap(void* globalDistributedMemoryHeapBottomAddress)
   }
 }
 
+/**
+ * Frees an entry in the distributed heap, this removes all corresponding entries from the directory
+ */
 static void distributedheap_free(struct memkind* kind, void* ptr) { removeAllMemoriesByUUID((unsigned long)ptr); }
 
+/**
+ * The malloc for the contiguous distributed heap allocation. The master process will determine the addresses and send these out to all
+ * other processes, who will register them in their directories and handle their own specific local allocation (pin the memory, set up
+ * the RMA window & return the handle to this.)
+ */
 static void* distributedheap_contiguous_malloc(struct distmem* dist_kind, size_t element_size, size_t number_elements,
                                                struct distmem_block* allocation_blocks, int number_blocks, int nargs, ...) {
   va_list ap;

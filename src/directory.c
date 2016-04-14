@@ -11,6 +11,7 @@
 #include <memkind.h>
 #include "directory.h"
 
+// Internal structure holding an entry in the directory
 struct memory_element_structure {
   void* startAddress, *endAddress;
   int homeNode;
@@ -22,10 +23,17 @@ struct memory_element_structure* root = NULL;
 
 static struct memory_element_structure* getMemoryElementByAddress(void*);
 
+/**
+ * Registers a memory entry based upon its start address & the number of elements
+ */
 void registerMemory(void* address, size_t numberElements, int homeNode) {
   registerMemoryStartEnd(address, (void*)address + numberElements, homeNode, 0);
 }
 
+/**
+ * Registers a memory entry based upon its start and end address. The UUID allows us to match a specific id to multiple entries for
+ * later reference.
+ */
 void registerMemoryStartEnd(void* startAddress, void* endAddress, int homeNode, unsigned long uuid) {
   struct memory_element_structure* newEntry =
       (struct memory_element_structure*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memory_element_structure));
@@ -39,12 +47,18 @@ void registerMemoryStartEnd(void* startAddress, void* endAddress, int homeNode, 
   root = newEntry;
 }
 
+/**
+ * Retrieves the home node corresponding to a specific address
+ */
 int getHomeNode(void* address) {
   struct memory_element_structure* specificMemoryItem = getMemoryElementByAddress(address);
   if (specificMemoryItem == NULL) return -1;
   return specificMemoryItem->homeNode;
 }
 
+/**
+ * Removes an item in the directory based upon its address
+ */
 void removeMemoryByAddress(void* address) {
   struct memory_element_structure* specificMemoryItem = getMemoryElementByAddress(address);
   if (specificMemoryItem != NULL) {
@@ -55,10 +69,13 @@ void removeMemoryByAddress(void* address) {
   }
 }
 
+/**
+ * Removes all items in the directory that have a specific unique id
+ */
 void removeAllMemoriesByUUID(unsigned long uuid) {
   struct memory_element_structure* head = root, *prev_head = NULL;
   while (head != NULL) {
-    if (head->uuid == uuid) {
+    if (head->uuid != 0 && head->uuid == uuid) {
       if (head->prev != NULL) head->prev->next = head->next;
       if (head->next != NULL) head->next->prev = head->prev;
       if (head == root) root = head->next;
@@ -72,6 +89,9 @@ void removeAllMemoriesByUUID(unsigned long uuid) {
   }
 }
 
+/**
+ * Retrieves a specific entry in the directory based upon and address that falls within the range of that entry
+ */
 static struct memory_element_structure* getMemoryElementByAddress(void* address) {
   struct memory_element_structure* head = root;
   while (head != NULL) {

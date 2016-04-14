@@ -24,6 +24,12 @@ void *baseLocalHeapAddress;
 memkind_t LOCALHEAP_KIND;
 static void *my_pmem_mmap(struct memkind *, void *, size_t);
 
+/**
+ * Initialises the local heap space, the master will determine the local heap start address for each process. This is broadcast to all
+ * processes who will then set up their own space via memkind, pin it & allocate the RMA window. All heaps are added into the directory
+ * here. Note that there might be slight gaps between local heaps and the start of the global address space and the first heap, this is
+ * because jemalloc requires the start address to divide into its chunk size so we have to round up to this.
+ */
 void *initialise_local_heap_space(int myRank, int totalRanks, void *global_base_address) {
   int i;
   struct memkind_ops *my_memkind_ops = (struct memkind_ops *)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memkind_ops));
@@ -72,4 +78,7 @@ void *initialise_local_heap_space(int myRank, int totalRanks, void *global_base_
   return priv->addr;
 }
 
+/**
+ * Called by memkind and returns the mmapped region
+ */
 static void *my_pmem_mmap(struct memkind *kind, void *addr, size_t size) { return ((struct memkind_pmem *)kind->priv)->addr; }

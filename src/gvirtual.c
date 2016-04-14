@@ -39,8 +39,8 @@ static unsigned long determineVirtualAddressSpace();
 static int getLocalMemoryMap(unsigned long **);
 static struct memory_allocation_item *appendInfoOrModifyMemoryList(struct memory_allocation_item *, unsigned long, unsigned long);
 static struct memory_allocation_item *processAllMemorySpacesIntoAllocationTree(unsigned long **, int *);
-static struct memory_allocation_item *part(struct memory_allocation_item *, struct memory_allocation_item *,
-                                           struct memory_allocation_item **);
+static struct memory_allocation_item *partitionMemoryList(struct memory_allocation_item *, struct memory_allocation_item *,
+                                                          struct memory_allocation_item **);
 static void quickSort(struct memory_allocation_item *, struct memory_allocation_item *);
 static void sortMemory(struct memory_allocation_item *);
 static void combineContiguousChunks(struct memory_allocation_item *);
@@ -51,6 +51,9 @@ static void deleteMemkindKind();
 
 memkind_t MEMKIND_MEMLOOKUP;
 
+/**
+ * Initialises the global virtual address space
+ */
 void initialiseGlobalVirtualAddressSpace() {
   generateMemkindKind();
   MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
@@ -73,14 +76,25 @@ void initialiseGlobalVirtualAddressSpace() {
   initialise_distributed_heap(address_space_descriptor.distributedMemoryHeapGlobalAddressStart);
 }
 
+/**
+ * Returns the descriptor of the global virtual address space
+ */
 struct global_address_space_descriptor getGlobalVirtualAddressSpaceDescription() { return address_space_descriptor; }
 
+/**
+ * Deletes the node's process memory analysis memory kind and unmap the associated memory
+ */
 static void deleteMemkindKind() {
   memkind_arena_destroy(MEMKIND_MEMLOOKUP);
   struct memkind_pmem *priv = MEMKIND_MEMLOOKUP->priv;
   munmap(priv->addr, priv->max_size);
 }
 
+/**
+ * Generates the kind that is associated with analysing the nodes's processes memory to find a hole large enough for the global virtual
+ * address space. We don't want the memory to change whilst this is happening, hence reserve a space large enough via mmap here and
+ * allocate all required data into there
+ */
 static void generateMemkindKind() {
   struct memkind_ops *my_memkind_ops = (struct memkind_ops *)malloc(sizeof(struct memkind_ops));
   memcpy(my_memkind_ops, &MEMKIND_PMEM_OPS, sizeof(struct memkind_ops));
@@ -100,8 +114,17 @@ static void generateMemkindKind() {
   priv->offset = 0;
 }
 
+/**
+ * Callback from memkind, returns the address of the mmapped region
+ */
 static void *my_pmem_mmap(struct memkind *kind, void *addr, size_t size) { return ((struct memkind_pmem *)kind->priv)->addr; }
 
+/**
+ * Determines the global virtual address space and returns the value of the start of this region which is large enough on each process
+ * to hold the global virtual address space.
+ * This will gather all the processes' memory spaces onto the master process, sort them according to address & combine similar and
+ * overlapping spaces.
+ */
 static unsigned long determineVirtualAddressSpace() {
   unsigned long *memoryDetails;
   int numberOfMemoryEntries = getLocalMemoryMap(&memoryDetails);
@@ -138,6 +161,10 @@ static unsigned long determineVirtualAddressSpace() {
   return startOfGlobalAddressSpace;
 }
 
+/**
+ * Builds up a sorted, non-overlapping non-contiguous allocation list of memory for all processes and then identifies a hole large
+ * enough for the global virtual address space to sit in. The starting address of this whole is returned
+ */
 static unsigned long getStartOfGlobalVirtualAddressSpace(unsigned long **memorySpaces, int *entriesPerProcess) {
   struct memory_allocation_item *memoryAllocations = processAllMemorySpacesIntoAllocationTree(memorySpaces, entriesPerProcess);
   struct memory_allocation_item *root = memoryAllocations, *tofree;
@@ -154,6 +181,9 @@ static unsigned long getStartOfGlobalVirtualAddressSpace(unsigned long **memoryS
   return allocation;
 }
 
+/**
+ * Builds up an allocation tree of all existing processes memory, the entries are unique, sorted, non-contiguous and non-overlapping
+ */
 static struct memory_allocation_item *processAllMemorySpacesIntoAllocationTree(unsigned long **memorySpaces, int *entriesPerProcess) {
   struct memory_allocation_item *head = NULL;
   int i, j;
@@ -167,6 +197,9 @@ static struct memory_allocation_item *processAllMemorySpacesIntoAllocationTree(u
   return head;
 }
 
+/**
+ * Searches the allocation tree for any contiguous memory items and combines these together
+ */
 static void combineContiguousChunks(struct memory_allocation_item *head) {
   struct memory_allocation_item *root = head, *prevnode = NULL;
   unsigned long prevend = 0;
@@ -185,6 +218,10 @@ static void combineContiguousChunks(struct memory_allocation_item *head) {
   }
 }
 
+/**
+ * Will either append a memory item onto the memory list, or returns an existing item if the provided start and end sits within that
+ * existing node
+ */
 static struct memory_allocation_item *appendInfoOrModifyMemoryList(struct memory_allocation_item *head, unsigned long startAddress,
                                                                    unsigned long endAddress) {
   struct memory_allocation_item *root = head;
@@ -202,14 +239,20 @@ static struct memory_allocation_item *appendInfoOrModifyMemoryList(struct memory
   return newItem;
 }
 
+/**
+ * Sorts memory in ascending order based upon the start address
+ */
 static void sortMemory(struct memory_allocation_item *head) {
   struct memory_allocation_item *tail = head;
   while (tail != NULL && tail->next != NULL) tail = tail->next;
   quickSort(head, tail);
 }
 
-static struct memory_allocation_item *part(struct memory_allocation_item *head, struct memory_allocation_item *tail,
-                                           struct memory_allocation_item **newtail) {
+/**
+ * Partitions and sorts the memory list for Quicksort
+ */
+static struct memory_allocation_item *partitionMemoryList(struct memory_allocation_item *head, struct memory_allocation_item *tail,
+                                                          struct memory_allocation_item **newtail) {
   if (head == NULL || tail == NULL) return NULL;
   unsigned long pt = tail->start;
   unsigned long tempStart, tempEnd;
@@ -236,15 +279,22 @@ static struct memory_allocation_item *part(struct memory_allocation_item *head, 
   return init;
 }
 
+/**
+ * Quicksort for the sorting of memory list based upon the start address
+ */
 static void quickSort(struct memory_allocation_item *head, struct memory_allocation_item *tail) {
   if (tail != NULL && tail != head && tail->next != head) {
     struct memory_allocation_item *newlast = NULL;
-    struct memory_allocation_item *sec = part(head, tail, &newlast);
+    struct memory_allocation_item *sec = partitionMemoryList(head, tail, &newlast);
     quickSort(head, newlast);
     quickSort(sec->next, tail);
   }
 }
 
+/**
+ * Reads the local proc entry for this process to build up an array of existing allocated memory which will later on be sent to the
+ * master process
+ */
 static int getLocalMemoryMap(unsigned long **memoryDetails) {
   char fname[PATH_MAX];
   sprintf(fname, "/proc/%ld/maps", (long)getpid());
