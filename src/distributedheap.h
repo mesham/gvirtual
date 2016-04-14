@@ -8,8 +8,6 @@
 #ifndef DISTRIBUTEDHEAP_H_
 #define DISTRIBUTEDHEAP_H_
 
-extern memkind_t DISTRIBUTEDHEAP_CONTIGUOUS_KIND;
-
-void initialise_distributed_heap();
+void gvi_distributedHeap_initialise();
 
 #endif /* DISTRIBUTEDHEAP_H_ */

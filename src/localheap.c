@@ -31,7 +31,7 @@ static void *my_pmem_mmap(struct memkind *, void *, size_t);
  * here. Note that there might be slight gaps between local heaps and the start of the global address space and the first heap, this is
  * because jemalloc requires the start address to divide into its chunk size so we have to round up to this.
  */
-void *initialise_local_heap_space(int myRank, int totalRanks, void *global_base_address) {
+void *gvi_localHeap_initialise(int myRank, int totalRanks, void *global_base_address) {
   int i;
   struct memkind_ops *my_memkind_ops = (struct memkind_ops *)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memkind_ops));
   memcpy(my_memkind_ops, &MEMKIND_PMEM_OPS, sizeof(struct memkind_ops));
@@ -72,7 +72,7 @@ void *initialise_local_heap_space(int myRank, int totalRanks, void *global_base_
   mlock(priv->addr, priv->max_size);
 
   for (i = 0; i < totalRanks; i++) {
-    registerMemory((void *)start_addresses[i], LOCAL_HEAP_SIZE, i);
+    gvi_directory_registerMemory((void *)start_addresses[i], LOCAL_HEAP_SIZE, i);
   }
   MPI_Win win;
   MPI_Win_create(priv->addr, LOCAL_HEAP_SIZE, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win);

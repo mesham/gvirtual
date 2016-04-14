@@ -26,15 +26,15 @@ static struct memory_element_structure* getMemoryElementByAddress(void*);
 /**
  * Registers a memory entry based upon its start address & the number of elements
  */
-void registerMemory(void* address, size_t numberElements, int homeNode) {
-  registerMemoryStartEnd(address, (void*)address + numberElements, homeNode, 0);
+void gvi_directory_registerMemory(void* address, size_t numberElements, int homeNode) {
+  gvi_directory_registerMemoryStartEnd(address, (void*)address + numberElements, homeNode, 0);
 }
 
 /**
  * Registers a memory entry based upon its start and end address. The UUID allows us to match a specific id to multiple entries for
  * later reference.
  */
-void registerMemoryStartEnd(void* startAddress, void* endAddress, int homeNode, unsigned long uuid) {
+void gvi_directory_registerMemoryStartEnd(void* startAddress, void* endAddress, int homeNode, unsigned long uuid) {
   struct memory_element_structure* newEntry =
       (struct memory_element_structure*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memory_element_structure));
   newEntry->startAddress = startAddress;
@@ -50,7 +50,7 @@ void registerMemoryStartEnd(void* startAddress, void* endAddress, int homeNode, 
 /**
  * Retrieves the home node corresponding to a specific address
  */
-int getHomeNode(void* address) {
+int gvi_directory_getHomeNode(void* address) {
   struct memory_element_structure* specificMemoryItem = getMemoryElementByAddress(address);
   if (specificMemoryItem == NULL) return -1;
   return specificMemoryItem->homeNode;
@@ -59,7 +59,7 @@ int getHomeNode(void* address) {
 /**
  * Removes an item in the directory based upon its address
  */
-void removeMemoryByAddress(void* address) {
+void gvi_directory_removeMemoryByAddress(void* address) {
   struct memory_element_structure* specificMemoryItem = getMemoryElementByAddress(address);
   if (specificMemoryItem != NULL) {
     if (specificMemoryItem->next != NULL) specificMemoryItem->next->prev = specificMemoryItem->prev;
@@ -72,7 +72,7 @@ void removeMemoryByAddress(void* address) {
 /**
  * Removes all items in the directory that have a specific unique id
  */
-void removeAllMemoriesByUUID(unsigned long uuid) {
+void gvi_directory_removeAllMemoriesByUUID(unsigned long uuid) {
   struct memory_element_structure* head = root, *prev_head = NULL;
   while (head != NULL) {
     if (head->uuid != 0 && head->uuid == uuid) {

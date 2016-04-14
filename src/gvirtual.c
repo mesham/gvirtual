@@ -55,7 +55,7 @@ memkind_t MEMKIND_MEMLOOKUP;
 /**
  * Initialises the global virtual address space
  */
-void initialiseGlobalVirtualAddressSpace() {
+void gv_initialise() {
   generateMemkindKind();
   MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
   MPI_Comm_size(MPI_COMM_WORLD, &totalRanks);
@@ -71,16 +71,18 @@ void initialiseGlobalVirtualAddressSpace() {
   address_space_descriptor.globalAddressSpaceEnd = address_space_descriptor.globalAddressSpaceStart + GLOBAL_ADDRESS_SPACE_SIZE - 1;
   distmem_mpi_init();
   address_space_descriptor.localHeapGlobalAddressStart =
-      initialise_local_heap_space(myRank, totalRanks, address_space_descriptor.globalAddressSpaceStart);
+      gvi_localHeap_initialise(myRank, totalRanks, address_space_descriptor.globalAddressSpaceStart);
   address_space_descriptor.distributedMemoryHeapGlobalAddressStart =
       address_space_descriptor.localHeapGlobalAddressStart + (totalRanks * LOCAL_HEAP_SIZE);
-  initialise_distributed_heap(address_space_descriptor.distributedMemoryHeapGlobalAddressStart);
+  gvi_distributedHeap_initialise(address_space_descriptor.distributedMemoryHeapGlobalAddressStart);
 }
 
 /**
  * Returns the descriptor of the global virtual address space
  */
-struct global_address_space_descriptor getGlobalVirtualAddressSpaceDescription() { return address_space_descriptor; }
+struct global_address_space_descriptor gv_getAddressSpaceDescription() { return address_space_descriptor; }
+
+int gv_getHomeNode(void *address) { return gvi_directory_getHomeNode(address); }
 
 /**
  * Deletes the node's process memory analysis memory kind and unmap the associated memory

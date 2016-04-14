@@ -19,7 +19,11 @@ struct global_address_space_descriptor {
 static const unsigned long GLOBAL_ADDRESS_SPACE_SIZE = 64ul * 1024ul * 1024ul * 1024ul;
 static const unsigned long LOCAL_HEAP_SIZE = 64ul * 1024ul * 1024ul;
 
-void initialiseGlobalVirtualAddressSpace();
-struct global_address_space_descriptor getGlobalVirtualAddressSpaceDescription();
+extern memkind_t LOCALHEAP_KIND;
+extern memkind_t DISTRIBUTEDHEAP_CONTIGUOUS_KIND;
+
+void gv_initialise();
+struct global_address_space_descriptor gv_getAddressSpaceDescription();
+int gv_getHomeNode(void *);
 
 #endif /* SRC_GVIRTUAL_H_ */

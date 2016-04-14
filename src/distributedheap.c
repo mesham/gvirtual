@@ -34,7 +34,7 @@ struct global_vm_block {
 /**
  * Will initialise the distributed heap, starting at a specific memory address
  */
-void initialise_distributed_heap(void* globalDistributedMemoryHeapBottomAddress) {
+void gvi_distributedHeap_initialise(void* globalDistributedMemoryHeapBottomAddress) {
   globalDistributedMemoryHeapCurrentBottom = globalDistributedMemoryHeapBottomAddress;
   struct memkind_ops* my_memkind_ops = (struct memkind_ops*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memkind_ops));
   memcpy(my_memkind_ops, &MEMKIND_PMEM_OPS, sizeof(struct memkind_ops));
@@ -65,7 +65,7 @@ void initialise_distributed_heap(void* globalDistributedMemoryHeapBottomAddress)
 /**
  * Frees an entry in the distributed heap, this removes all corresponding entries from the directory
  */
-static void distributedheap_free(struct memkind* kind, void* ptr) { removeAllMemoriesByUUID((unsigned long)ptr); }
+static void distributedheap_free(struct memkind* kind, void* ptr) { gvi_directory_removeAllMemoriesByUUID((unsigned long)ptr); }
 
 /**
  * The malloc for the contiguous distributed heap allocation. The master process will determine the addresses and send these out to all
@@ -104,8 +104,8 @@ static void* distributedheap_contiguous_malloc(struct distmem* dist_kind, size_t
   }
   // Done in two stages to "tag" each entry in directory with the start address, this is so we can free memory in the directory
   for (i = 0; i < number_blocks; i++) {
-    registerMemoryStartEnd((void*)address_blocks[i].startAddress, (void*)address_blocks[i].endAddress, address_blocks[i].owner_pid,
-                           (unsigned long)my_start_address);
+    gvi_directory_registerMemoryStartEnd((void*)address_blocks[i].startAddress, (void*)address_blocks[i].endAddress,
+                                         address_blocks[i].owner_pid, (unsigned long)my_start_address);
   }
   memkind_free(MEMKIND_DEFAULT, address_blocks);
   if (local_mem_size > 0) mlock(my_start_address, local_mem_size);
