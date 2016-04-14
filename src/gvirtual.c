@@ -74,7 +74,7 @@ void gv_initialise() {
       gvi_localHeap_initialise(myRank, totalRanks, address_space_descriptor.globalAddressSpaceStart);
   address_space_descriptor.distributedMemoryHeapGlobalAddressStart =
       address_space_descriptor.localHeapGlobalAddressStart + (totalRanks * LOCAL_HEAP_SIZE);
-  gvi_distributedHeap_initialise(address_space_descriptor.distributedMemoryHeapGlobalAddressStart);
+  gvi_distributedHeap_initialise(address_space_descriptor);
 }
 
 /**
