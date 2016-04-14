@@ -26,6 +26,7 @@
 #define BUFFER_MAX 1024
 #define SIZE_MEM_STRIDES 1024
 #define VIRTUAL_ADDRESS_SEARCH_MEMORY_SIZE 4 * 1024 * 1024
+#define MASTER_RANK 0
 
 static int myRank, totalRanks;
 struct global_address_space_descriptor address_space_descriptor;
@@ -129,19 +130,23 @@ static unsigned long determineVirtualAddressSpace() {
   unsigned long *memoryDetails;
   int numberOfMemoryEntries = getLocalMemoryMap(&memoryDetails);
   unsigned long startOfGlobalAddressSpace;
-  if (myRank == 0) {
+  if (myRank == MASTER_RANK) {
     int i, elements;
     MPI_Status status;
     unsigned long **memorySpaces = (unsigned long **)memkind_malloc(MEMKIND_MEMLOOKUP, sizeof(unsigned long *) * totalRanks);
     int *numberEntries = (int *)memkind_malloc(MEMKIND_MEMLOOKUP, sizeof(int) * totalRanks);
-    memorySpaces[0] = memoryDetails;
-    numberEntries[0] = numberOfMemoryEntries;
-    for (i = 1; i < totalRanks; i++) {
-      MPI_Probe(i, 0, MPI_COMM_WORLD, &status);
-      MPI_Get_elements(&status, MPI_UNSIGNED_LONG, &elements);
-      memorySpaces[i] = (unsigned long *)memkind_malloc(MEMKIND_MEMLOOKUP, sizeof(unsigned long) * elements);
-      numberEntries[i] = elements / 2;
-      MPI_Recv(memorySpaces[i], elements, MPI_UNSIGNED_LONG, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    for (i = 0; i < totalRanks; i++) {
+      if (i != myRank) {
+        MPI_Probe(i, 0, MPI_COMM_WORLD, &status);
+        MPI_Get_elements(&status, MPI_UNSIGNED_LONG, &elements);
+        memorySpaces[i] = (unsigned long *)memkind_malloc(MEMKIND_MEMLOOKUP, sizeof(unsigned long) * elements);
+        numberEntries[i] = elements / 2;
+        MPI_Recv(memorySpaces[i], elements, MPI_UNSIGNED_LONG, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      } else {
+        // Local for the master
+        memorySpaces[i] = memoryDetails;
+        numberEntries[i] = numberOfMemoryEntries;
+      }
     }
     startOfGlobalAddressSpace = getStartOfGlobalVirtualAddressSpace(memorySpaces, numberEntries);
     for (i = 1; i < totalRanks; i++) {
@@ -149,10 +154,10 @@ static unsigned long determineVirtualAddressSpace() {
     }
     memkind_free(MEMKIND_MEMLOOKUP, memorySpaces);
     memkind_free(MEMKIND_MEMLOOKUP, numberEntries);
-    MPI_Bcast(&startOfGlobalAddressSpace, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&startOfGlobalAddressSpace, 1, MPI_UNSIGNED_LONG, MASTER_RANK, MPI_COMM_WORLD);
   } else {
-    MPI_Send(memoryDetails, numberOfMemoryEntries * 2, MPI_UNSIGNED_LONG, 0, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&startOfGlobalAddressSpace, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+    MPI_Send(memoryDetails, numberOfMemoryEntries * 2, MPI_UNSIGNED_LONG, MASTER_RANK, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&startOfGlobalAddressSpace, 1, MPI_UNSIGNED_LONG, MASTER_RANK, MPI_COMM_WORLD);
   }
   if (startOfGlobalAddressSpace == -1) {
     fprintf(stderr, "Can not find a chunk large enough for global virtual address space");
@@ -170,10 +175,10 @@ static unsigned long getStartOfGlobalVirtualAddressSpace(unsigned long **memoryS
   struct memory_allocation_item *root = memoryAllocations, *tofree;
   unsigned long allocation = -1;
   while (root != NULL) {
-    if (root->next != NULL)
-      if (root->next != NULL && root->next->start - root->end > GLOBAL_ADDRESS_SPACE_SIZE) {
-        return roundup(root->end + 1, 4096);
-      }
+    if (root->next != NULL && allocation == -1 && root->next != NULL && root->next->start - root->end > GLOBAL_ADDRESS_SPACE_SIZE) {
+      long page_size = sysconf(_SC_PAGESIZE);
+      allocation = roundup(root->end + 1, page_size);
+    }
     tofree = root;
     root = root->next;
     memkind_free(MEMKIND_MEMLOOKUP, tofree);

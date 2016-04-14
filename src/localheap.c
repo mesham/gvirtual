@@ -19,9 +19,10 @@
 #include <string.h>
 #include <math.h>
 
-void *baseLocalHeapAddress;
+#define MASTER_RANK 0
 
 memkind_t LOCALHEAP_KIND;
+
 static void *my_pmem_mmap(struct memkind *, void *, size_t);
 
 /**
@@ -45,7 +46,7 @@ void *initialise_local_heap_space(int myRank, int totalRanks, void *global_base_
   distmem_create(localheap_vtable, "localheap", &LOCALHEAP_KIND);
 
   unsigned long start_addresses[totalRanks];
-  if (myRank == 0) {
+  if (myRank == MASTER_RANK) {
     size_t jemk_chunksize_exponent;
     size_t s = sizeof(jemk_chunksize_exponent);
     jemk_mallctl("opt.lg_chunk", &jemk_chunksize_exponent, &s, NULL, 0);
@@ -60,7 +61,7 @@ void *initialise_local_heap_space(int myRank, int totalRanks, void *global_base_
       start_addresses[i] = roundup(start_addresses[i], jemk_chunksize);
     }
   }
-  MPI_Bcast(start_addresses, totalRanks, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+  MPI_Bcast(start_addresses, totalRanks, MPI_UNSIGNED_LONG, MASTER_RANK, MPI_COMM_WORLD);
 
   struct memkind_pmem *priv = LOCALHEAP_KIND->priv;
   priv->fd = 0;

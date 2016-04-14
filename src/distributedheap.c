@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define MASTER_RANK 0
+
 static void* globalDistributedMemoryHeapCurrentBottom;
 static void* distributedheap_contiguous_malloc(struct distmem*, size_t, size_t, struct distmem_block*, int, int, ...);
 static void distributedheap_free(struct memkind*, void*);
@@ -83,7 +85,7 @@ static void* distributedheap_contiguous_malloc(struct distmem* dist_kind, size_t
       (struct global_vm_block*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct global_vm_block) * number_blocks);
   void* my_start_address = NULL;
   size_t local_mem_size = 0;
-  if (my_rank == 0) {
+  if (my_rank == MASTER_RANK) {
     for (i = 0; i < number_blocks; i++) {
       address_blocks[i].startAddress =
           (unsigned long)globalDistributedMemoryHeapCurrentBottom + (allocation_blocks[i].startElement * element_size);
@@ -93,7 +95,7 @@ static void* distributedheap_contiguous_malloc(struct distmem* dist_kind, size_t
     }
     globalDistributedMemoryHeapCurrentBottom += element_size * number_elements;
   }
-  MPI_Bcast(address_blocks, number_blocks, GVM_BLOCKS, 0, communicator);
+  MPI_Bcast(address_blocks, number_blocks, GVM_BLOCKS, MASTER_RANK, communicator);
   for (i = 0; i < number_blocks; i++) {
     if (address_blocks[i].owner_pid == my_rank) {
       my_start_address = (void*)address_blocks[i].startAddress;
