@@ -60,6 +60,10 @@ void gvi_distributedHeap_initialise(struct global_address_space_descriptor addre
 
   int err = distmem_create(distributed_heap_vtable, "distributedcontiguous", &DISTRIBUTEDHEAP_CONTIGUOUS_KIND);
 
+  if (err) {
+    fprintf(stderr, "Error allocating distributed kind\n");
+  }
+
   MPI_Datatype oldtypes[] = {MPI_UNSIGNED_LONG, MPI_UNSIGNED_LONG, MPI_INT};
   int blockCounts[3] = {1, 1, 1};
   MPI_Aint offsets[3];
@@ -68,10 +72,6 @@ void gvi_distributedHeap_initialise(struct global_address_space_descriptor addre
   offsets[2] = offsetof(struct global_distributed_block, owner_pid);
   MPI_Type_struct(3, blockCounts, offsets, oldtypes, &GVM_DISTRIBUTED_BLOCKS);
   MPI_Type_commit(&GVM_DISTRIBUTED_BLOCKS);
-
-  if (err) {
-    fprintf(stderr, "Error allocating distributed kind\n");
-  }
 }
 
 /**

@@ -8,6 +8,7 @@
 #include "gvirtual.h"
 #include "distmem_mpi.h"
 #include "directory.h"
+#include "cache.h"
 #include <mpi.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -63,7 +64,7 @@ void gv_initialise() {
   address_space_descriptor.globalAddressSpaceStart =
       mmap((void *)startofAddressSpace, GLOBAL_ADDRESS_SPACE_SIZE, PROT_READ | PROT_WRITE,
            MAP_ANON | MAP_PRIVATE | MAP_NORESERVE | MAP_FIXED, -1, 0);
-  deleteMemkindKind();
+  // deleteMemkindKind();
   if (address_space_descriptor.globalAddressSpaceStart == MAP_FAILED) {
     fprintf(stderr, "Global virtual address space reservation error, error is '%s'\n", strerror(errno));
     abort();
@@ -83,6 +84,20 @@ void gv_initialise() {
 struct global_address_space_descriptor gv_getAddressSpaceDescription() { return address_space_descriptor; }
 
 int gv_getHomeNode(void *address) { return gvi_directory_getHomeNode(address); }
+
+void *gv_acquireMutable(void *globalAddress, size_t elements) {
+  return gvi_cache_retrieveData(globalAddress, elements, gvi_directory_getHomeNode(globalAddress));
+}
+
+void *gv_acquireConst(void *globalAddress, size_t elements) {
+  return gvi_cache_retrieveData(globalAddress, elements, gvi_directory_getHomeNode(globalAddress));
+}
+
+void gv_commitKeepMutable(void *address) { gvi_cache_commitData(address, gvi_directory_getHomeNode(address)); }
+
+void gv_commitMakeConst(void *address) { gvi_cache_commitData(address, gvi_directory_getHomeNode(address)); }
+
+void gv_release(void *address) {}
 
 /**
  * Deletes the node's process memory analysis memory kind and unmap the associated memory

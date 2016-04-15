@@ -25,5 +25,10 @@ extern memkind_t DISTRIBUTEDHEAP_CONTIGUOUS_KIND;
 void gv_initialise();
 struct global_address_space_descriptor gv_getAddressSpaceDescription();
 int gv_getHomeNode(void *);
+void *gv_acquireMutable(void *, size_t);
+void *gv_acquireConst(void *, size_t);
+void gv_commitKeepMutable(void *);
+void gv_commitMakeConst(void *);
+void gv_release(void *);
 
 #endif /* SRC_GVIRTUAL_H_ */
