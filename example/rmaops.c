@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
   for (i = 0; i < 10; i++) {
     data[i] = myrank;
   }
-
+  MPI_Barrier(MPI_COMM_WORLD);  // To ensure the values are set before we copy into the cache
   if (myrank == 0) {
     unsigned long intAddress;
     MPI_Recv(&intAddress, 1, MPI_UNSIGNED_LONG, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -33,11 +33,11 @@ int main(int argc, char* argv[]) {
       cachedRemoteData[i] *= 10;
     }
     gv_commitMakeConst((void*)intAddress);
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);  // Ensure the updated values are committed
   } else {
     unsigned long intAddress = (unsigned long)data;
     MPI_Send(&intAddress, 1, MPI_UNSIGNED_LONG, 0, 0, MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);  // Ensure the updated values are committed
     printf("%d\n", data[0]);
   }
 
