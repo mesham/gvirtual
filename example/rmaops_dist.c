@@ -37,7 +37,10 @@ int main(int argc, char* argv[]) {
         sumTotal += cachedRemoteData[j];
         cachedRemoteData[j] = (100 * i) + j;
       }
-      if (i != 0) gv_commitMakeConst(&dist_data[i * 10]);
+      if (i != 0) {
+        gv_commitMakeConst(&dist_data[i * 10]);
+        gv_release(&dist_data[i * 10]);
+      }
     }
     printf("[%d] Total sum of all values is %d\n", myrank, sumTotal);
   }
