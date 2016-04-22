@@ -9,6 +9,7 @@
 #include "distmem_mpi.h"
 #include "directory.h"
 #include "gvirtual.h"
+#include "distributedheap.h"
 #include <memkind/internal/memkind_default.h>
 #include <memkind/internal/memkind_arena.h>
 #include <memkind/internal/memkind_pmem.h>
@@ -22,12 +23,6 @@
 MPI_Datatype GVM_DISTRIBUTED_BLOCKS;
 
 memkind_t DISTRIBUTEDHEAP_CONTIGUOUS_KIND;
-
-// The distributed block structure that is communicated from the master to other processes
-struct global_distributed_block {
-  unsigned long startAddress, endAddress;
-  int owner_pid;
-};
 
 // Allocated memory structure that holds a specific memory allocation within the global virtual address space
 struct gvm_allocated_memory {
@@ -119,8 +114,7 @@ static void* distributedheap_contiguous_malloc(struct distmem* dist_kind, size_t
   }
   memkind_free(MEMKIND_DEFAULT, address_blocks);
   if (local_mem_size > 0) mlock(my_start_address, local_mem_size);
-  MPI_Win win;
-  MPI_Win_create(my_start_address, (MPI_Aint)local_mem_size, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+  gvi_cache_registerDistributedHeapMemory(my_start_address, local_mem_size);
 
   return my_start_address;
 }
