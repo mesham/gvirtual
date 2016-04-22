@@ -21,5 +21,6 @@ void gvi_cache_registerLocalHeap(MPI_Win, void*, unsigned long*, int);
 void gvi_cache_registerDistributedHeapMemory(void*, size_t);
 void* gvi_cache_retrieveData(void*, size_t, int);
 void gvi_cache_commitData(void*, int);
+void gvi_cache_release(void*);
 
 #endif /* CACHE_H_ */

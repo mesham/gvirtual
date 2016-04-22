@@ -98,7 +98,7 @@ void gv_commitKeepMutable(void *address) { gvi_cache_commitData(address, gvi_dir
 
 void gv_commitMakeConst(void *address) { gvi_cache_commitData(address, gvi_directory_getHomeNode(address)); }
 
-void gv_release(void *address) {}
+void gv_release(void *address) { gvi_cache_release(address); }
 
 /**
  * Deletes the node's process memory analysis memory kind and unmap the associated memory

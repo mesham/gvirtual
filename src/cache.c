@@ -85,6 +85,20 @@ void gvi_cache_commitData(void* global_address, int homeNode) {
   }
 }
 
+void gvi_cache_release(void* global_address) {
+  unsigned long translatedAddress = (unsigned long)global_address;
+  struct cached_item* existingCachedInfo = findCachedItemByGlobalAddress((unsigned long)global_address);
+  if (existingCachedInfo == NULL) {
+    fprintf(stderr, "Can not find cached item");
+    abort();
+  }
+  memkind_free(INTERNAL_LOCALCACHE_KIND, (void*)existingCachedInfo->local_address);
+  if (existingCachedInfo->next != NULL) existingCachedInfo->next->prev = existingCachedInfo->prev;
+  if (existingCachedInfo->prev != NULL) existingCachedInfo->prev->next = existingCachedInfo->next;
+  if (existingCachedInfo == cachedRoot) cachedRoot = existingCachedInfo->next;
+  memkind_free(MEMKIND_DEFAULT, existingCachedInfo);
+}
+
 static void addNewCachedItem(unsigned long translatedAddress, unsigned long cachedData, size_t elements) {
   struct cached_item* new_cached_item = (struct cached_item*)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct cached_item));
   new_cached_item->global_address = translatedAddress;
@@ -103,5 +117,3 @@ static struct cached_item* findCachedItemByGlobalAddress(unsigned long global_ad
   }
   return NULL;
 }
-
-// implement release, but hold the data to avoid a re-copy (can clear out on demand)
