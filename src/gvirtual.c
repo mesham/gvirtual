@@ -71,6 +71,7 @@ void gv_initialise() {
   }
   address_space_descriptor.globalAddressSpaceEnd = address_space_descriptor.globalAddressSpaceStart + GLOBAL_ADDRESS_SPACE_SIZE - 1;
   distmem_mpi_init();
+  gvi_cache_init();
   address_space_descriptor.localHeapGlobalAddressStart =
       gvi_localHeap_initialise(myRank, totalRanks, address_space_descriptor.globalAddressSpaceStart);
   address_space_descriptor.distributedMemoryHeapGlobalAddressStart =
@@ -114,7 +115,7 @@ static void deleteMemkindKind() {
  * allocate all required data into there
  */
 static void generateMemkindKind() {
-  struct memkind_ops *my_memkind_ops = (struct memkind_ops *)malloc(sizeof(struct memkind_ops));
+  struct memkind_ops *my_memkind_ops = (struct memkind_ops *)memkind_malloc(MEMKIND_DEFAULT, sizeof(struct memkind_ops));
   memcpy(my_memkind_ops, &MEMKIND_PMEM_OPS, sizeof(struct memkind_ops));
   my_memkind_ops->mmap = my_pmem_mmap;
 
@@ -192,7 +193,8 @@ static unsigned long getStartOfGlobalVirtualAddressSpace(unsigned long **memoryS
   struct memory_allocation_item *root = memoryAllocations, *tofree;
   unsigned long allocation = -1;
   while (root != NULL) {
-    if (root->next != NULL && allocation == -1 && root->next != NULL && root->next->start - root->end > GLOBAL_ADDRESS_SPACE_SIZE) {
+    if (root->next != NULL && allocation == -1 && root->next != NULL && root->next->start > root->end &&
+        root->next->start - root->end > GLOBAL_ADDRESS_SPACE_SIZE) {
       long page_size = sysconf(_SC_PAGESIZE);
       allocation = roundup(root->end + 1, page_size);
     }
