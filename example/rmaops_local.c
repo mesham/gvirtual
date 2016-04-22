@@ -47,5 +47,6 @@ int main(int argc, char* argv[]) {
 
   memkind_free(LOCALHEAP_KIND, data);
   memkind_finalize();
+  MPI_Finalize();
   return 0;
 }
