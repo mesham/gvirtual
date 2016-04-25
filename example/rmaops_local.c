@@ -35,6 +35,8 @@ int main(int argc, char* argv[]) {
       cachedRemoteData[i] *= 10;  // Modify the cached value
     }
     gv_commitMakeConst((void*)intAddress);  // Commit the cached value back to original location on rank 1
+    // Release this (I guess these will become one operation but for now am keeping separate, currently the release will free the
+    // memory in the cache, we might want to keep data in there for later access)
     gv_release((void*)intAddress);
     MPI_Barrier(MPI_COMM_WORLD);  // Ensure the updated values are committed before rank 1 does the display
   } else if (myrank == 1) {
